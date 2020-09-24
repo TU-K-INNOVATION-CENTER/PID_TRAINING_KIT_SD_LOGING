@@ -1,6 +1,16 @@
 #include <Arduino.h>
 #include <SD.h>
 
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
+
+const char* ssid = "******************";
+const char* password = "*****************";
+
+//Your Domain name with URL path or IP address with path
+const char* serverName = "http://pid-api.herokuapp.com/post/data";
+
 #define CS_PIN D8
 
 double Kp = 1;
@@ -19,7 +29,7 @@ double error;
 
 
 bool log_data = true;
-bool read_log_file = false;
+bool send_now = true;
 unsigned long test_duration = 6000;
 unsigned long test_start_time = 0;
 
@@ -52,25 +62,7 @@ void pid_control() {
   }
 }
 
-void setup() {
-   Serial.begin(115200);
-
-  if (!SD.begin(CS_PIN)) {
-    Serial.println("Error Initializing SD card");
-  }
-  
-  else{
-    Serial.println("SD card Initialized successfully");
-  }
-
-  //Check for pre_existing log file and erase
-  if (SD.exists("PH_LOG.csv")) {
-      SD.remove("PH_LOG.csv");
-  } 
-
-}
-
-void parse_payload(String payload){
+String parse_payload(String payload){
   //error,control_signal,desired_value,actual_value,time
   int error_end_index = payload.indexOf(',',0);
   int control_signal_end_index = payload.indexOf(',',error_end_index+1);
@@ -93,6 +85,71 @@ void parse_payload(String payload){
   Serial.print(retreived_actual_value);
   Serial.print(" Time: ");
   Serial.println(retreived_time);
+
+  String payload_to_transmit = "{\"controlValue\":"+retreived_control_signal+",\"error\":"+retreived_error+",\"actualValue\":"+retreived_actual_value+",\"parameter\":1,\"time\":"+retreived_time+"}";
+
+  return payload_to_transmit;
+}
+
+void send_payload(String data){
+    //Check WiFi connection status
+    if(WiFi.status()== WL_CONNECTED){
+      HTTPClient http;
+      
+      // Your Domain name with URL path or IP address with path
+      http.begin(serverName);
+
+      // Specify content-type header
+      http.addHeader("Content-Type", "application/json");
+      int httpResponseCode = http.POST(data);
+     
+      Serial.print("HTTP Response code: ");
+      Serial.println(httpResponseCode);
+        
+      // Free resources
+      http.end();
+    }
+    else {
+      Serial.println("WiFi Disconnected");
+    }
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  WiFi.begin(ssid, password);
+  Serial.println("Connecting");
+  while(WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    yield();
+  }
+  Serial.println("");
+  Serial.print("Connected to WiFi network with IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  yield();
+
+  if (!SD.begin(CS_PIN)) {
+    Serial.println("Error Initializing SD card");
+  }
+  
+  else{
+    Serial.println("SD card Initialized successfully");
+  }
+
+  yield();
+
+  //Check for pre_existing log file and erase
+  if (SD.exists("PH_LOG.csv")) {
+      SD.remove("PH_LOG.csv");
+  } 
+
+  Serial.println("Setup complete");
+
+  test_start_time = millis();
+
+  yield();
 }
 
 void loop() {
@@ -138,15 +195,20 @@ void loop() {
   }
 
     if((millis() - test_start_time) > test_duration){
-      File dataFile = SD.open("PH_LOG.csv", FILE_READ);
-      if(dataFile){
-        while (dataFile.available()) {
-          String payload = dataFile.readStringUntil('\n');
-           parse_payload(payload);
-          delay(1000);
-        }
+      if(send_now){
+        File dataFile = SD.open("PH_LOG.csv", FILE_READ);
+        if(dataFile){
+          while (dataFile.available()) {
+            String payload = dataFile.readStringUntil('\n');
+            String parsed_payload = parse_payload(payload);
+            send_payload(parsed_payload);
+          }
 
-        dataFile.close();
-   }
+          dataFile.close();
+          send_now = false;
+          Serial.println("********************************************payload Delivered***********************************************");
+        }
+      }
+     
     }
 }
