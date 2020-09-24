@@ -76,13 +76,12 @@ void parse_payload(String payload){
   int control_signal_end_index = payload.indexOf(',',error_end_index+1);
   int desired_value_end_index = payload.indexOf(',',control_signal_end_index+1);
   int actual_value_end_index = payload.indexOf(',',desired_value_end_index+1);
-  //int time_end_index = payload.lastIndexOf('\n');
 
   String retreived_error = payload.substring(0,error_end_index);
   String retreived_control_signal = payload.substring(error_end_index+1,control_signal_end_index);
   String retreived_desired_value = payload.substring(control_signal_end_index+1,desired_value_end_index);
   String retreived_actual_value = payload.substring(desired_value_end_index+1,actual_value_end_index);
-  //String retreived_time = payload.substring(actual_value_end_index,time_end_index-1);
+  String retreived_time = payload.substring(-1,actual_value_end_index+1);
 
   Serial.print("Error: ");
   Serial.print(retreived_error);
@@ -91,10 +90,9 @@ void parse_payload(String payload){
   Serial.print(" Desired: ");
   Serial.print(retreived_desired_value);
   Serial.print(" Actual: ");
-  Serial.println(retreived_actual_value);
-  //Serial.print(" Time: ");
- // Serial.println(retreived_time);
-
+  Serial.print(retreived_actual_value);
+  Serial.print(" Time: ");
+  Serial.println(retreived_time);
 }
 
 void loop() {
@@ -121,17 +119,14 @@ void loop() {
           Serial.println("ERROR Opening logging file");
         }
 
-       Serial.print(error);
+        Serial.print(error);
         Serial.print(",");
         Serial.print(control_signal);
         Serial.print(",");
         Serial.print(desired_ph_value);
         Serial.print(",");
-        Serial.println(actual_ph_value);
-      
+        Serial.println(actual_ph_value);      
     }
-
-
 
     if(error_type == true){ //positive error
       actual_ph_value+=0.1;
